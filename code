@@ -1,0 +1,154 @@
+-- Bản Fix lỗi logic + Thêm tính năng làm mờ nhân vật khi bật (để nhận biết)
+-- Tính năng: Nhấn G hoặc bấm nút UI để Tàng Hình Local.
+
+if _G.a then
+    for v, v2 in pairs(_G.a) do
+        v2:Disconnect()
+    end
+    _G.a = nil
+end
+
+repeat
+    task.wait()
+until game.Players.LocalPlayer
+
+local v3 = nil -- Humanoid
+local v4 = nil -- HumanoidRootPart
+local v5 = false -- Trạng thái tàng hình
+local config = {}
+local originalTransparencies = {} -- Lưu lại độ mờ gốc của nhân vật
+local _upv1 = game.Players.LocalPlayer
+
+-- Hàm quét và cập nhật các bộ phận nhân vật
+local function func_91a1daf7()
+    local char = _upv1.Character or _upv1.CharacterAdded:Wait()
+    v3 = char:WaitForChild("Humanoid")
+    v4 = char:WaitForChild("HumanoidRootPart")
+    config = {}
+    originalTransparencies = {}
+
+    for _, v2 in pairs(char:GetDescendants()) do
+        -- Chỉ lấy các bộ phận hiển thị (Part, MeshPart, Decal như mặt, tóc, quần áo...)
+        if v2:IsA("BasePart") or v2:IsA("Decal") then
+            if v2.Name ~= "HumanoidRootPart" then -- Giữ nguyên RootPart để tránh lỗi game
+                config[#config + 1] = v2
+                originalTransparencies[v2] = v2.Transparency -- Ghi nhớ độ mờ ban đầu
+            end
+        end
+    end
+end
+
+-- Hàm cập nhật độ mờ của nhân vật dựa trên trạng thái bật/tắt
+local function updateCharacterVisibility()
+    for _, part in pairs(config) do
+        if part and part.Parent then
+            if v5 then
+                -- Khi BẬT: Làm mờ nhân vật đi 50% (0.5)
+                part.Transparency = 0.5
+            else
+                -- Khi TẮT: Trả về độ mờ gốc ban đầu
+                part.Transparency = originalTransparencies[part] or 0
+            end
+        end
+    end
+end
+
+local function func_10b28465()
+    local screenGui = Instance.new("ScreenGui")
+    screenGui.Name = "InvisGui"
+    screenGui.ResetOnSpawn = false
+    
+    local textButton = Instance.new("TextButton")
+    textButton.Size = UDim2.new(0, 100, 0, 50)
+    textButton.Position = UDim2.new(0.5, -50, 0.1, 0)
+    textButton.Text = "Invisible"
+    textButton.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
+    textButton.Parent = screenGui
+    
+    local oldGui = game.Players.LocalPlayer:WaitForChild("PlayerGui"):FindFirstChild("InvisGui")
+    if oldGui then oldGui:Destroy() end
+    
+    screenGui.Parent = game.Players.LocalPlayer:WaitForChild("PlayerGui")
+    
+    local dragging = false
+    local dragInput, dragStart, startPos
+
+    textButton.InputBegan:Connect(function(p0)
+        if p0.UserInputType == Enum.UserInputType.MouseButton1 then
+            dragging = true
+            dragStart = p0.Position
+            startPos = textButton.Position
+        end
+    end)
+
+    textButton.InputChanged:Connect(function(p0)
+        if p0.UserInputType == Enum.UserInputType.MouseMovement and dragging then
+            local delta = p0.Position - dragStart
+            textButton.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+        end
+    end)
+
+    textButton.InputEnded:Connect(function(p0)
+        if p0.UserInputType == Enum.UserInputType.MouseButton1 then
+            dragging = false
+        end
+    end)
+
+    textButton.MouseButton1Click:Connect(function()
+        v5 = not v5
+        updateCharacterVisibility() -- Cập nhật làm mờ
+        if v5 then
+            textButton.BackgroundColor3 = Color3.fromRGB(0, 255, 0)
+        else
+            textButton.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
+        end
+    end)
+end
+
+-- Khởi chạy lần đầu
+func_91a1daf7()
+func_10b28465()
+
+local config2 = {}
+
+-- Lắng nghe phím G
+config2[1] = game.Players.LocalPlayer:GetMouse().KeyDown:Connect(function(p0)
+    if p0 == "g" then
+        v5 = not v5
+        updateCharacterVisibility() -- Cập nhật làm mờ
+        
+        -- Cập nhật luôn màu của nút UI cho đồng bộ
+        local gui = game.Players.LocalPlayer.PlayerGui:FindFirstChild("InvisGui")
+        if gui and gui:FindFirstChild("TextButton") then
+            gui.TextButton.BackgroundColor3 = v5 and Color3.fromRGB(0, 255, 0) or Color3.fromRGB(255, 0, 0)
+        end
+    end
+end)
+
+-- Vòng lặp tàng hình bằng cách kéo CFrame xuống đất
+local RunService = game:GetService("RunService")
+config2[2] = RunService.Heartbeat:Connect(function()
+    if v5 and v4 and v3 then
+        local currentCFrame = v4.CFrame
+        local targetCFrame = currentCFrame + CFrame.new(0, 99999, 0)
+        
+        v4.CFrame = targetCFrame
+        v3.CameraOffset = targetCFrame:ToObjectSpace(CFrame.new(currentCFrame.Position)).Position
+        
+        RunService.RenderStepped:Wait()
+        
+        v4.CFrame = currentCFrame
+    elseif v3 then
+        v3.CameraOffset = Vector3.new(0, 0, 0)
+    end
+end)
+
+-- Reset trạng thái khi hồi sinh (Spawn lại)
+game.Players.LocalPlayer.CharacterAdded:Connect(function()
+    v5 = false
+    task.wait(0.5)
+    func_91a1daf7()
+    func_10b28465()
+end)
+
+_G.a = config2
