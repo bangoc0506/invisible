@@ -130,7 +130,7 @@ local RunService = game:GetService("RunService")
 config2[2] = RunService.Heartbeat:Connect(function()
     if v5 and v4 and v3 then
         local currentCFrame = v4.CFrame
-        local targetCFrame = currentCFrame + CFrame.new(0, 99999, 0)
+        local targetCFrame = currentCFrame * CFrame.new(0, 99999, 0)
         
         v4.CFrame = targetCFrame
         v3.CameraOffset = targetCFrame:ToObjectSpace(CFrame.new(currentCFrame.Position)).Position
